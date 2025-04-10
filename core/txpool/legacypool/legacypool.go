@@ -111,6 +111,8 @@ var (
 	// dropBetweenReorgHistogram counts how many drops we experience between two reorg runs. It is expected
 	// that this number is pretty low, since txpool reorgs happen very frequently.
 	dropBetweenReorgHistogram = metrics.NewRegisteredHistogram("txpool/dropbetweenreorg", nil, metrics.NewExpDecaySample(1028, 0.015))
+	// daLimitThrottleMeter counts how many transactions are rejected due to the max da size limit.
+	daLimitThrottleMeter = metrics.NewRegisteredMeter("txpoool/da_limit_throttle", nil)
 
 	pendingGauge = metrics.NewRegisteredGauge("txpool/pending", nil)
 	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
@@ -592,6 +594,7 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address]
 			for i, tx := range txs {
 				estimate := tx.RollupCostData().EstimatedDASize()
 				if estimate.Cmp(filter.MaxDATxSize) > 0 {
+					daLimitThrottleMeter.Mark(1)
 					log.Debug("filtering tx that exceeds max da tx size",
 						"hash", tx.Hash(), "txda", estimate, "dalimit", filter.MaxDATxSize)
 					txs = txs[:i]
